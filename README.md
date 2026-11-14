@@ -95,7 +95,7 @@ src/
   components/        componenti riutilizzabili
   data/types.ts      struttura dei dati
   lib/               dati (store), meteo, valanghe, preferiti
+  theme.ts           colori
 scripts/scrape.mjs   raccoglie i dati (gira ogni ora su GitHub Actions)
 data/snow.json       dati raccolti
-  theme.ts           colori
 ```
