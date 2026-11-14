@@ -27,10 +27,13 @@ export const MAP_HTML = `<!doctype html>
 <div id="map"></div>
 <script>
   var send = function (o) { window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); };
-  var map = L.map('map', { zoomControl: false, attributionControl: true }).setView([46.75, 8.25], 7);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertile_voyager/{z}/{x}/{y}{r}.png', {
-    maxZoom: 18, subdomains: 'abcd',
-    attribution: '&copy; OpenStreetMap &copy; CARTO'
+  var map = L.map('map', { zoomControl: false, attributionControl: true, zoomSnap: 0.25 });
+  // inquadra la Svizzera, qualunque sia la dimensione dello schermo
+  map.fitBounds([[45.82, 5.96], [47.81, 10.49]], { padding: [10, 10] });
+  // Cartina OpenStreetMap (gratuita, nessuna chiave). Uso consentito per app personali a basso traffico.
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '&copy; OpenStreetMap'
   }).addTo(map);
 
   var layer = L.layerGroup().addTo(map);

@@ -87,7 +87,8 @@ export default function MapScreen() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <WebView
         ref={web}
-        source={{ html: MAP_HTML }}
+        // baseUrl: i server delle cartine vogliono sapere da dove arriva la richiesta
+        source={{ html: MAP_HTML, baseUrl: 'https://swiski.app/' }}
         originWhitelist={['*']}
         onMessage={onMessage}
         style={StyleSheet.absoluteFill}
