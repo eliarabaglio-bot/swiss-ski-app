@@ -17,7 +17,7 @@ import { StatusBadge } from '../../components/ResortCard';
 import type { Lift, LiftKind, Resort, Webcam } from '../../data/types';
 import { DANGER, fetchDangerLevel, SLF_URL, type DangerLevel } from '../../lib/avalanche';
 import { useFavorites } from '../../lib/favorites';
-import { formatDate, formatUpdated, it, KIND_LABEL, KIND_ORDER } from '../../lib/format';
+import { formatDate, formatUpdated, isStale, it, KIND_LABEL, KIND_ORDER, MAX_REPORT_AGE_DAYS, peakToday } from '../../lib/format';
 import { useStore } from '../../lib/store';
 import { describeWeather, fetchDetail, type WeatherDetail } from '../../lib/weather';
 import { colors, radius, space } from '../../theme';
@@ -106,6 +106,8 @@ export default function ResortScreen() {
         </View>
         {weatherError ? <Text style={{ color: colors.bad }}>⚠️ {weatherError}</Text> : null}
 
+        <FreshnessBanner resort={resort} />
+
         {resort.comments ? (
           <View style={styles.notice}>
             <Text style={styles.noticeTitle}>📢 Comunicazione della stazione</Text>
@@ -163,7 +165,7 @@ export default function ResortScreen() {
         <Section title="ℹ️ Info">
           <Row label="Orari impianti" value={resort.openFrom ? `${resort.openFrom} – ${resort.openUntil ?? '?'}` : '—'} />
           <Row label="Stagione" value={`${formatDate(resort.seasonStart, true)} – ${formatDate(resort.seasonEnd, true)}`} />
-          <Row label="Bollettino aggiornato" value={formatUpdated(resort.reportUpdatedAt)} />
+          <Row label="Bollettino aggiornato" value={resort.reportUpdatedAt ? formatUpdated(resort.reportUpdatedAt + '+01:00') : 'senza data'} />
           {resort.website ? <LinkRow label="Sito ufficiale" onPress={() => open(resort.website!)} /> : null}
           <LinkRow label="Bollettino completo su MySwitzerland" onPress={() => open(resort.url)} />
         </Section>
@@ -171,6 +173,35 @@ export default function ResortScreen() {
 
       <WebcamViewer cam={cam} onClose={() => setCam(null)} />
     </>
+  );
+}
+
+// ---------- Affidabilità ----------
+
+function FreshnessBanner({ resort }: { resort: Resort }) {
+  const when = resort.reportUpdatedAt ? formatUpdated(resort.reportUpdatedAt + '+01:00') : null;
+  const peak = peakToday(resort);
+  if (isStale(resort)) {
+    return (
+      <View style={styles.notice}>
+        <Text style={styles.noticeTitle}>⚠️ Dati probabilmente non aggiornati</Text>
+        <Text style={styles.noticeText}>
+          {when
+            ? `La stazione ha aggiornato il bollettino l'ultima volta il ${when} (più di ${MAX_REPORT_AGE_DAYS} giorni fa).`
+            : 'La stazione non fornisce dati aggiornati.'}{' '}
+          Impianti e piste aperti potrebbero essere diversi: controlla sul sito ufficiale.
+        </Text>
+        {resort.website ? <LinkRow label="Sito ufficiale" onPress={() => open(resort.website!)} /> : null}
+      </View>
+    );
+  }
+  return (
+    <View style={styles.fresh}>
+      <Text style={styles.freshText}>
+        ✓ Bollettino della stazione aggiornato il {when}
+        {peak ? `\nOggi erano aperti fino a ${peak.lifts} impianti e ${peak.pistesKm} km di piste.` : ''}
+      </Text>
+    </View>
   );
 }
 
@@ -248,6 +279,16 @@ function LiftsSection({ resort }: { resort: Resort }) {
           La stazione non pubblica l'elenco dei singoli impianti. I dettagli sono sul sito ufficiale.
         </Text>
       )}
+      {resort.pistesKm && resort.pistesKm.open > 0 && resort.lifts?.open === 0 ? (
+        <Text style={styles.note}>
+          ⚠️ La stazione indica piste aperte ma nessun impianto: il dato sulle piste è probabilmente vecchio.
+        </Text>
+      ) : null}
+      {groups.length && resort.lifts && resort.liftList.filter((l) => l.status === 'open').length !== resort.lifts.open ? (
+        <Text style={styles.note}>
+          ⚠️ L'elenco dei singoli impianti non coincide con il totale comunicato dalla stazione: potrebbe non essere aggiornato.
+        </Text>
+      ) : null}
       <Row label="Condizioni piste" value={it(resort.slopeCondition)} />
       {!resort.hasCurrentData ? (
         <Text style={styles.note}>⚠️ La stazione al momento non fornisce dati aggiornati: verifica sul sito ufficiale.</Text>
@@ -428,6 +469,8 @@ const styles = StyleSheet.create({
   notice: { backgroundColor: '#FFF7E6', borderRadius: radius.md, padding: space.md, borderWidth: 1, borderColor: '#F5D9A3' },
   noticeTitle: { fontWeight: '700', color: '#8A5A00', marginBottom: 4 },
   noticeText: { color: '#5C4300', fontSize: 13, lineHeight: 18 },
+  fresh: { backgroundColor: '#E9F7EF', borderRadius: radius.md, padding: space.md },
+  freshText: { color: '#1F6B40', fontSize: 13, lineHeight: 18 },
   card: { backgroundColor: colors.card, borderRadius: radius.md, padding: space.lg, borderWidth: 1, borderColor: colors.border, gap: space.sm },
   h2: { fontSize: 16, fontWeight: '700', color: colors.text },
   grid: { flexDirection: 'row', gap: space.sm },

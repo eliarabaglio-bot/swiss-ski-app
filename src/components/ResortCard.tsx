@@ -4,7 +4,7 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Resort } from '../data/types';
 import { useFavorites } from '../lib/favorites';
-import { resortStatus } from '../lib/format';
+import { formatUpdated, resortStatus } from '../lib/format';
 import { describeWeather, type WeatherSummary } from '../lib/weather';
 import { colors, radius, space } from '../theme';
 
@@ -42,6 +42,9 @@ function ResortCardBase({ resort, weather }: { resort: Resort; weather?: Weather
             <Text style={styles.sub} numberOfLines={1}>
               {resort.place} · {resort.region}
             </Text>
+            <Text style={styles.updated} numberOfLines={1}>
+              Bollettino: {resort.reportUpdatedAt ? formatUpdated(resort.reportUpdatedAt + '+01:00') : 'senza data'}
+            </Text>
           </View>
           <Pressable hitSlop={12} onPress={() => toggle(resort.id)} accessibilityLabel="Preferito">
             <Ionicons name={fav ? 'star' : 'star-outline'} size={24} color={fav ? colors.star : colors.muted} />
@@ -52,7 +55,7 @@ function ResortCardBase({ resort, weather }: { resort: Resort; weather?: Weather
           <Stat
             label="Impianti"
             value={lifts ? `${lifts.open}/${lifts.total}` : '—'}
-            color={lifts && lifts.open > 0 ? colors.good : undefined}
+            color={lifts && lifts.open > 0 && resortStatus(resort).key === 'open' ? colors.good : undefined}
           />
           <Stat label="Neve in quota" value={resort.snowTopCm != null ? `${resort.snowTopCm} cm` : '—'} />
           <Stat label="Neve 24h" value={fresh != null ? `${fresh} cm` : '—'} color={fresh != null && fresh >= 10 ? colors.primary : undefined} />
@@ -100,6 +103,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   name: { fontSize: 17, fontWeight: '700', color: colors.text },
   sub: { fontSize: 13, color: colors.muted, marginTop: 2 },
+  updated: { fontSize: 11, color: colors.muted, marginTop: 1 },
   stats: { flexDirection: 'row', marginTop: space.md, backgroundColor: colors.bg, borderRadius: radius.sm, paddingVertical: space.sm },
   stat: { flex: 1, alignItems: 'center' },
   statValue: { fontSize: 15, fontWeight: '700', color: colors.text },

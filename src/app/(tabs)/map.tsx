@@ -11,7 +11,7 @@ import { colors, radius, space } from '../../theme';
 
 type Mode = 'stato' | 'neve';
 
-const STATUS_COLORS = { open: '#1F9D55', soon: '#1E6FD9', closed: '#9AA9B8' } as const;
+const STATUS_COLORS = { open: '#1F9D55', lifts: '#7C8DB5', stale: '#E09B3D', soon: '#1E6FD9', closed: '#9AA9B8' } as const;
 
 function snowColor(cm: number | null) {
   if (cm == null || cm < 1) return '#9AA9B8';
@@ -26,7 +26,9 @@ function colorFor(mode: Mode, r: Resort, w?: WeatherSummary) {
 
 const LEGEND: Record<Mode, [string, string][]> = {
   stato: [
-    [STATUS_COLORS.open, 'Aperta'],
+    [STATUS_COLORS.open, 'Aperta (piste)'],
+    [STATUS_COLORS.lifts, 'Solo impianti'],
+    [STATUS_COLORS.stale, 'Dati vecchi'],
     [STATUS_COLORS.soon, 'Apre a breve'],
     [STATUS_COLORS.closed, 'Chiusa'],
   ],

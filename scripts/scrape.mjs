@@ -7,7 +7,7 @@
 //   prezzi, stagione. I dati sono inseriti dalle stazioni stesse (sistema WISPO / infosnow).
 // - Webcam: elenco pubblico di Guidle usato da MySwitzerland (immagini aggiornate automaticamente).
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
 const BASE = 'https://snow.myswitzerland.com';
 const LIST_URL = `${BASE}/snow_reports/piste/`;
@@ -362,6 +362,24 @@ async function main() {
       .sort((a, b) => a.d - b.d)
       .slice(0, WEBCAMS_PER_RESORT)
       .map(({ c }) => ({ id: c.id, title: c.title, image: c.image, thumb: c.thumb, full: c.full, player: c.player }));
+  }
+
+  // "Massimo di oggi": la sera molte stazioni segnano tutto chiuso. Ricordiamo quanti impianti/piste
+  // erano aperti durante la giornata (ora svizzera) leggendo il file precedente.
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Zurich' }).format(new Date()); // YYYY-MM-DD
+  let prev = new Map();
+  try {
+    const old = JSON.parse(await readFile('data/snow.json', 'utf8'));
+    prev = new Map(old.resorts.map((r) => [r.id, r]));
+  } catch {}
+  for (const r of resorts) {
+    const p = prev.get(r.id)?.dayPeak;
+    const same = p?.date === today;
+    r.dayPeak = {
+      date: today,
+      lifts: Math.max(r.lifts?.open ?? 0, same ? p.lifts : 0),
+      pistesKm: Math.max(r.pistesKm?.open ?? 0, same ? p.pistesKm : 0),
+    };
   }
 
   resorts.sort((a, b) => a.name.localeCompare(b.name, 'it'));
