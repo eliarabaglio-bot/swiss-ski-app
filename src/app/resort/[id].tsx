@@ -390,7 +390,7 @@ function WebcamViewer({ cam, onClose }: { cam: Webcam | null; onClose: () => voi
 
 function PricesSection({ resort }: { resort: Resort }) {
   const p = resort.prices;
-  const fmt = (v: number | null | undefined) => (v != null ? `CHF ${v}` : '—');
+  const fmt = (v: number | null | undefined) => (v != null ? `${p?.dynamic ? 'da ' : ''}CHF ${v}` : '—');
   return (
     <Section title="🎟️ Giornaliera">
       {p && (p.adult != null || p.child != null) ? (

@@ -71,7 +71,7 @@ function ResortCardBase({ resort, weather }: { resort: Resort; weather?: Weather
           <Text style={styles.meta} numberOfLines={1}>
             {weather?.temp != null ? `${w.emoji} ${Math.round(weather.temp)}°  ·  ` : ''}
             {resort.pistesKm ? `${resort.pistesKm.open}/${Math.round(resort.pistesKm.total)} km  ·  ` : ''}
-            {price != null ? `CHF ${price}` : resort.prices?.dynamic ? 'prezzo dinamico' : ''}
+            {price != null ? `${resort.prices?.dynamic ? 'da ' : ''}CHF ${price}` : resort.prices?.dynamic ? 'prezzo dinamico' : ''}
           </Text>
         </View>
       </Pressable>
