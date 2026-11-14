@@ -4,6 +4,7 @@
 // 2. Poi scarica la versione aggiornata da GitHub (aggiornata ogni ora da GitHub Actions).
 // 3. In parallelo scarica il meteo (Open-Meteo) per tutte le stazioni.
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Resort, SnowData } from '../data/types';
 import { fetchSummaries, type WeatherSummary } from './weather';
@@ -13,6 +14,8 @@ const BUNDLED: SnowData = require('../../data/snow.json');
 
 export const DATA_URL = 'https://raw.githubusercontent.com/eliarabaglio-bot/swiss-ski-app/main/data/snow.json';
 const CACHE_KEY = 'swiski:snow-data';
+/** Quando torni nell'app dopo almeno questo tempo, i dati si aggiornano da soli. */
+const AUTO_REFRESH_MS = 15 * 60 * 1000;
 
 type Ctx = {
   resorts: Resort[];
@@ -59,7 +62,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const lastRefresh = useRef(0);
+
   const refresh = useCallback(async () => {
+    lastRefresh.current = Date.now();
     setLoading(true);
     setError(null);
     let current: SnowData | null = null;
@@ -92,6 +98,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       refresh();
     })();
   }, [refresh, setData]);
+
+  // Aggiorna da solo quando l'app torna in primo piano dopo un po' di tempo
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && Date.now() - lastRefresh.current > AUTO_REFRESH_MS) refresh();
+    });
+    return () => sub.remove();
+  }, [refresh]);
 
   const value = useMemo<Ctx>(() => {
     const byId = new Map<string, Resort>();
