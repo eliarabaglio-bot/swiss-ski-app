@@ -1,0 +1,65 @@
+# Costruisce l'app Android installabile (APK) e la pubblica nella pagina "Releases" del repository.
+# Si avvia a mano da GitHub: Actions -> "Crea APK Android" -> Run workflow
+# (oppure con un tag che inizia con "apk-").
+name: Crea APK Android
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags: ['apk-*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Installa dipendenze
+        run: npm ci
+
+      - name: Genera progetto Android
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Compila APK
+        working-directory: android
+        run: |
+          set -o pipefail
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a 2>&1 | tee ../build.log
+          cp app/build/outputs/apk/release/app-release.apk ../SwiSki.apk
+
+      - name: Pubblica in Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: SwiSki Android (build ${{ github.run_number }})
+          body: |
+            App Android installabile. Scarica **SwiSki.apk** dal telefono e aprilo per installarlo.
+            I dati di impianti, neve e webcam si aggiornano da soli: non serve reinstallare per avere i dati nuovi.
+          files: SwiSki.apk
+          make_latest: true
+
+      - name: Salva log in caso di errore
+        if: failure()
+        run: |
+          git config user.name "swiski-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan build-log
+          git rm -rf --cached . > /dev/null
+          tail -c 200000 build.log > build-tail.log 2>/dev/null || echo "nessun log" > build-tail.log
+          git add -f build-tail.log
+          git commit -m "Log build fallita ${{ github.run_number }}"
+          git push -f origin build-log

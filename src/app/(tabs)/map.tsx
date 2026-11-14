@@ -1,15 +1,22 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, { Callout, Marker } from 'react-native-maps';
-import { freshSnow } from '../../components/ResortCard';
+import { WebView as RNWebView, type WebViewMessageEvent } from 'react-native-webview';
+import { freshSnow, StatusBadge } from '../../components/ResortCard';
 import type { Resort } from '../../data/types';
 import { resortStatus } from '../../lib/format';
+import { MAP_HTML, type MapPoint } from '../../lib/mapHtml';
 import { useStore } from '../../lib/store';
 import type { WeatherSummary } from '../../lib/weather';
 import { colors, radius, space } from '../../theme';
 
 type Mode = 'stato' | 'neve';
+
+// I tipi di react-native-webview non sono ancora allineati con React 19: usiamo un tipo semplificato
+type WebViewHandle = { injectJavaScript: (js: string) => void };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const WebView = RNWebView as unknown as React.ComponentType<any>;
 
 const STATUS_COLORS = { open: '#1F9D55', lifts: '#7C8DB5', stale: '#E09B3D', soon: '#1E6FD9', closed: '#9AA9B8' } as const;
 
@@ -41,47 +48,53 @@ const LEGEND: Record<Mode, [string, string][]> = {
 };
 
 export default function MapScreen() {
-  const { resorts, weather } = useStore();
+  const { resorts, weather, getResort } = useStore();
   const [mode, setMode] = useState<Mode>('stato');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const web = useRef<WebViewHandle>(null);
+
+  const points = useMemo<MapPoint[]>(
+    () =>
+      resorts
+        .filter((r) => r.lat != null && r.lon != null)
+        .map((r) => ({ id: r.id, name: r.name, lat: r.lat!, lon: r.lon!, color: colorFor(mode, r, weather[r.id]) })),
+    [resorts, weather, mode],
+  );
+
+  // invia i punti alla mappa quando cambiano
+  useEffect(() => {
+    if (!ready) return;
+    web.current?.injectJavaScript(
+      `window.setPoints(${JSON.stringify(points)}, ${JSON.stringify(selectedId)}); true;`,
+    );
+    // selectedId non serve come dipendenza: la selezione la gestisce già la mappa
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [points, ready]);
+
+  const onMessage = useCallback((e: WebViewMessageEvent) => {
+    try {
+      const msg = JSON.parse(e.nativeEvent.data);
+      if (msg.type === 'ready') setReady(true);
+      if (msg.type === 'select') setSelectedId(msg.id);
+    } catch {}
+  }, []);
+
+  const selected = selectedId ? getResort(selectedId) : undefined;
+  const openResort = (id: string) => router.push({ pathname: '/resort/[id]', params: { id } });
 
   return (
-    <View style={{ flex: 1 }}>
-      <MapView
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <WebView
+        ref={web}
+        source={{ html: MAP_HTML }}
+        originWhitelist={['*']}
+        onMessage={onMessage}
         style={StyleSheet.absoluteFill}
-        initialRegion={{ latitude: 46.75, longitude: 8.25, latitudeDelta: 2.6, longitudeDelta: 3.6 }}
-      >
-        {resorts.map((r) => {
-          if (r.lat == null || r.lon == null) return null;
-          const w = weather[r.id];
-          const color = colorFor(mode, r, w);
-          const fresh = freshSnow(r, w);
-          return (
-            <Marker
-              key={`${r.id}-${mode}-${color}`}
-              coordinate={{ latitude: r.lat, longitude: r.lon }}
-              tracksViewChanges={false}
-              anchor={{ x: 0.5, y: 0.5 }}
-            >
-              {/* Pallino disegnato da noi: su Android i colori dei segnaposto standard non sono affidabili */}
-              <View style={[styles.dot, { backgroundColor: color }]} />
-              <Callout onPress={() => router.push({ pathname: '/resort/[id]', params: { id: r.id } })}>
-                <View style={{ maxWidth: 230 }}>
-                  <Text style={styles.calloutTitle}>{r.name}</Text>
-                  <Text style={styles.calloutText}>
-                    {resortStatus(r).label}
-                    {r.lifts ? ` · ${r.lifts.open}/${r.lifts.total} impianti` : ''}
-                  </Text>
-                  <Text style={styles.calloutText}>
-                    {r.snowTopCm != null ? `${r.snowTopCm} cm in quota` : ''}
-                    {fresh != null ? ` · ${fresh} cm nuovi` : ''}
-                  </Text>
-                  <Text style={styles.calloutLink}>Apri scheda ›</Text>
-                </View>
-              </Callout>
-            </Marker>
-          );
-        })}
-      </MapView>
+        javaScriptEnabled
+        domStorageEnabled
+        setSupportMultipleWindows={false}
+      />
 
       <View style={styles.toggle}>
         {(['stato', 'neve'] as Mode[]).map((m) => (
@@ -93,7 +106,7 @@ export default function MapScreen() {
         ))}
       </View>
 
-      <View style={styles.legend}>
+      <View style={styles.legend} pointerEvents="none">
         {LEGEND[mode].map(([c, l]) => (
           <View key={l} style={styles.legendRow}>
             <View style={[styles.legendDot, { backgroundColor: c }]} />
@@ -101,15 +114,43 @@ export default function MapScreen() {
           </View>
         ))}
       </View>
+
+      {selected ? (
+        <Pressable style={styles.sheet} onPress={() => openResort(selected.id)}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.sheetTitle} numberOfLines={1}>
+              {selected.name}
+            </Text>
+            <Text style={styles.sheetSub} numberOfLines={1}>
+              {selected.place} · {selected.region}
+            </Text>
+            <View style={styles.sheetRow}>
+              <StatusBadge resort={selected} />
+              <Text style={styles.sheetFacts} numberOfLines={1}>
+                {selected.lifts ? `${selected.lifts.open}/${selected.lifts.total} impianti` : ''}
+                {selected.snowTopCm != null ? ` · ${selected.snowTopCm} cm` : ''}
+                {(() => {
+                  const f = freshSnow(selected, weather[selected.id]);
+                  return f ? ` · +${f} cm` : '';
+                })()}
+              </Text>
+            </View>
+            <Text style={styles.sheetLink}>Tocca per aprire la scheda ›</Text>
+          </View>
+          <Pressable hitSlop={12} onPress={() => setSelectedId(null)} style={styles.sheetClose}>
+            <Ionicons name="close" size={20} color={colors.muted} />
+          </Pressable>
+        </Pressable>
+      ) : (
+        <View style={styles.hint} pointerEvents="none">
+          <Text style={styles.hintText}>Tocca un pallino per vedere la stazione · ingrandisci per i nomi</Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: '#fff' },
-  calloutTitle: { fontWeight: '700', color: colors.text },
-  calloutText: { color: colors.muted, marginTop: 2 },
-  calloutLink: { color: colors.primary, marginTop: 4, fontWeight: '600' },
   toggle: {
     position: 'absolute',
     top: space.md,
@@ -127,7 +168,7 @@ const styles = StyleSheet.create({
   legend: {
     position: 'absolute',
     left: space.md,
-    bottom: space.md,
+    top: 64,
     backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: radius.sm,
     padding: space.sm,
@@ -137,4 +178,37 @@ const styles = StyleSheet.create({
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   legendDot: { width: 10, height: 10, borderRadius: 5 },
   legendText: { fontSize: 11, color: colors.text },
+  sheet: {
+    position: 'absolute',
+    left: space.md,
+    right: space.md,
+    bottom: space.md,
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  sheetTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
+  sheetSub: { fontSize: 13, color: colors.muted },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  sheetFacts: { flex: 1, fontSize: 13, color: colors.text },
+  sheetLink: { fontSize: 13, color: colors.primary, fontWeight: '700', marginTop: 2 },
+  sheetClose: { paddingLeft: space.sm },
+  hint: {
+    position: 'absolute',
+    bottom: space.md,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(15,34,51,0.75)',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  hintText: { color: '#fff', fontSize: 12 },
 });
