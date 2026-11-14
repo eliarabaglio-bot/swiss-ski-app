@@ -1,12 +1,12 @@
 # Costruisce l'app Android installabile (APK) e la pubblica nella pagina "Releases" del repository.
 # Si avvia a mano da GitHub: Actions -> "Crea APK Android" -> Run workflow
-# (oppure con un tag che inizia con "apk-").
+# (parte anche quando si aggiorna il ramo "build-apk").
 name: Crea APK Android
 
 on:
   workflow_dispatch: {}
   push:
-    tags: ['apk-*']
+    branches: [build-apk]
 
 permissions:
   contents: write
