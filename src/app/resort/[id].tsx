@@ -66,7 +66,7 @@ export default function ResortScreen() {
     );
   }
 
-  const fav = isFavorite(resort.id);
+  const fav = isFavorite(resort);
   const now = describeWeather(weather?.weatherCode);
 
   return (
@@ -75,7 +75,7 @@ export default function ResortScreen() {
         options={{
           title: resort.name,
           headerRight: () => (
-            <Pressable hitSlop={12} onPress={() => toggle(resort.id)}>
+            <Pressable hitSlop={12} onPress={() => toggle(resort)}>
               <Ionicons name={fav ? 'star' : 'star-outline'} size={24} color={fav ? colors.star : colors.primary} />
             </Pressable>
           ),

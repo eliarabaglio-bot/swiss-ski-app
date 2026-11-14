@@ -25,7 +25,7 @@ export function freshSnow(r: Resort, w?: WeatherSummary): number | null {
 
 function ResortCardBase({ resort, weather }: { resort: Resort; weather?: WeatherSummary }) {
   const { isFavorite, toggle } = useFavorites();
-  const fav = isFavorite(resort.id);
+  const fav = isFavorite(resort);
   const w = describeWeather(weather?.weatherCode);
   const fresh = freshSnow(resort, weather);
   const lifts = resort.lifts;
@@ -46,7 +46,7 @@ function ResortCardBase({ resort, weather }: { resort: Resort; weather?: Weather
               Bollettino: {resort.reportUpdatedAt ? formatUpdated(resort.reportUpdatedAt + '+01:00') : 'senza data'}
             </Text>
           </View>
-          <Pressable hitSlop={12} onPress={() => toggle(resort.id)} accessibilityLabel="Preferito">
+          <Pressable hitSlop={12} onPress={() => toggle(resort)} accessibilityLabel="Preferito">
             <Ionicons name={fav ? 'star' : 'star-outline'} size={24} color={fav ? colors.star : colors.muted} />
           </Pressable>
         </View>

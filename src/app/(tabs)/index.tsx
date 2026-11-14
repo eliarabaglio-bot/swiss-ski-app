@@ -36,7 +36,7 @@ export default function ResortsScreen() {
       (r) =>
         (!region || r.region === region) &&
         (status === 'tutte' || resortStatus(r).key === 'open') &&
-        (!q || r.name.toLowerCase().includes(q) || r.place.toLowerCase().includes(q)),
+        (!q || [r.name, r.place, ...(r.otherNames ?? [])].some((t) => t.toLowerCase().includes(q))),
     );
     const byName = (a: (typeof resorts)[0], b: (typeof resorts)[0]) => a.name.localeCompare(b.name, 'it');
     return [...filtered].sort((a, b) => {

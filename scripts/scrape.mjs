@@ -317,6 +317,53 @@ async function fetchWebcams() {
   return cams;
 }
 
+function mergeDuplicates(list) {
+  const same = (a, b) =>
+    a.lifts && b.lifts && a.pistesKm && b.pistesKm &&
+    a.lifts.total >= 8 && a.pistesKm.total >= 30 &&
+    a.lifts.total === b.lifts.total && a.lifts.open === b.lifts.open &&
+    a.pistesKm.total === b.pistesKm.total && a.pistesKm.open === b.pistesKm.open &&
+    a.lat != null && b.lat != null && distKm(a, b) < 30;
+  const used = new Set();
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    if (used.has(i)) continue;
+    const group = [list[i]];
+    for (let j = i + 1; j < list.length; j++) {
+      if (!used.has(j) && same(list[i], list[j])) {
+        group.push(list[j]);
+        used.add(j);
+      }
+    }
+    if (group.length === 1) {
+      out.push(list[i]);
+      continue;
+    }
+    // la scheda principale: nome più corto; il bollettino aggiornato più di recente
+    const main = [...group].sort((a, b) => a.name.length - b.name.length)[0];
+    const newest = [...group].sort((a, b) => (b.reportUpdatedAt ?? '').localeCompare(a.reportUpdatedAt ?? ''))[0];
+    const cams = new Map();
+    for (const g of group) for (const c of g.webcams ?? []) cams.set(c.id, c);
+    const places = [...new Set(group.map((g) => g.place))];
+    out.push({
+      ...newest,
+      id: main.id,
+      name: main.name,
+      url: main.url,
+      image: main.image ?? newest.image,
+      place: places.join(' / '),
+      website: main.website ?? newest.website,
+      prices: main.prices ?? newest.prices,
+      liftList: group.map((g) => g.liftList).sort((a, b) => b.length - a.length)[0],
+      webcams: [...cams.values()].slice(0, 8),
+      aliases: group.filter((g) => g.id !== main.id).map((g) => g.id),
+      otherNames: [...new Set(group.map((g) => g.name).filter((n) => n !== main.name))],
+    });
+    console.log(`Uniti: ${group.map((g) => g.name).join(' + ')}`);
+  }
+  return out;
+}
+
 // ---------- main ----------
 
 async function main() {
@@ -363,6 +410,12 @@ async function main() {
       .slice(0, WEBCAMS_PER_RESORT)
       .map(({ c }) => ({ id: c.id, title: c.title, image: c.image, thumb: c.thumb, full: c.full, player: c.player }));
   }
+
+  // Doppioni: lo stesso comprensorio pubblicato da due località (es. Verbier e Thyon - 4 Vallées).
+  // Si riconoscono perché hanno esattamente gli stessi impianti e km di piste e sono vicini.
+  const merged = mergeDuplicates(resorts);
+  resorts.length = 0;
+  resorts.push(...merged);
 
   // "Massimo di oggi": la sera molte stazioni segnano tutto chiuso. Ricordiamo quanti impianti/piste
   // erano aperti durante la giornata (ora svizzera) leggendo il file precedente.

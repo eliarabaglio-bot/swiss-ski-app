@@ -5,9 +5,9 @@ import { useStore } from '../../lib/store';
 import { colors, space } from '../../theme';
 
 export default function FavoritesScreen() {
-  const { favorites } = useFavorites();
+  const { isFavorite } = useFavorites();
   const { resorts, weather, loading, refresh } = useStore();
-  const list = resorts.filter((r) => favorites.includes(r.id));
+  const list = resorts.filter((r) => isFavorite(r));
 
   return (
     <FlatList

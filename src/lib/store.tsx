@@ -94,7 +94,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [refresh, setData]);
 
   const value = useMemo<Ctx>(() => {
-    const byId = new Map(data.resorts.map((r) => [r.id, r]));
+    const byId = new Map<string, Resort>();
+    for (const r of data.resorts) {
+      byId.set(r.id, r);
+      for (const a of r.aliases ?? []) byId.set(a, r); // vecchi id (preferiti salvati prima dell'unione)
+    }
     return {
       resorts: data.resorts,
       dataUpdatedAt: data.updatedAt,

@@ -55,6 +55,9 @@ export type Resort = {
   webcams?: Webcam[];
   /** Massimo di impianti/km aperti oggi (la sera molte stazioni segnano tutto chiuso). */
   dayPeak?: { date: string; lifts: number; pistesKm: number };
+  /** Id e nomi di schede unite a questa (stesso comprensorio pubblicato da più località). */
+  aliases?: string[];
+  otherNames?: string[];
 };
 
 export type SnowData = {
