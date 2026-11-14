@@ -2,19 +2,26 @@
 
 App per iPhone e Android con meteo, neve, pericolo valanghe, webcam e informazioni sulle stazioni sciistiche svizzere.
 
-## Cosa fa (versione 1)
+## Cosa fa
 
-- **Elenco di 41 stazioni**, con ricerca, filtro per regione e ordinamento (neve fresca, neve in arrivo, quota, prezzo, A–Z)
+- **174 stazioni svizzere**, con ricerca, filtro "aperte oggi", filtro per regione e ordinamento (impianti aperti, neve, neve fresca, neve in arrivo, prezzo, A–Z)
 - Per ogni stazione:
-  - temperatura in vetta e a valle
-  - neve caduta nelle ultime 24h, neve prevista nelle prossime 48h, altezza del manto (stima)
-  - previsioni a 7 giorni
-  - vento e zero termico
+  - **impianti aperti** (es. 8/30), divisi per tipo: funivie, cabinovie, seggiovie, skilift, con l'**elenco dei singoli impianti** quando la stazione lo pubblica
+  - km di piste aperte e discese a valle
+  - **neve misurata** in quota e in paese, neve fresca, qualità della neve, ultima nevicata
+  - **prezzi della giornaliera** (adulti, ragazzi, bambini), con indicazione dei prezzi dinamici
+  - **webcam** con le immagini aggiornate, a schermo intero e con il link live / 360°
+  - meteo attuale e previsioni a 7 giorni, neve prevista, vento, zero termico
   - pericolo valanghe dal bollettino ufficiale SLF
-  - km di piste, numero di impianti, prezzo indicativo della giornaliera
-  - webcam
-- **Mappa** della Svizzera, con le stazioni colorate in base alla neve fresca
-- **Preferiti**, salvati sul telefono
+  - comunicazioni della stazione, orari e date della stagione
+- **Mappa** con le stazioni colorate per stato (aperta / apre a breve / chiusa) o per neve fresca
+- **Preferiti** salvati sul telefono
+
+## Da dove arrivano i dati
+
+Ogni ora (dalle 6 alle 21) GitHub esegue `scripts/scrape.mjs`, che legge il bollettino neve ufficiale di Svizzera Turismo e l'elenco delle webcam, e salva tutto in `data/snow.json`. L'app scarica quel file. Se non c'è connessione, usa l'ultima copia salvata.
+
+Puoi lanciarlo anche a mano: vai su GitHub, poi **Actions** → **Aggiorna dati neve** → **Run workflow**.
 
 ## Come provarla sul telefono (da PC Windows)
 
@@ -61,28 +68,22 @@ Per scaricare gli aggiornamenti che faccio io:
 git pull
 ```
 
-## Webcam integrate (facoltativo, gratis)
-
-1. Crea un account su https://api.windy.com/keys e genera una chiave per **Webcams API** (piano gratuito).
-2. In `app.json` incolla la chiave in `"windyApiKey": ""`.
-
-Senza la chiave, l'app mostra un link alle webcam sul sito della stazione.
-
 ## Fonti dei dati
 
 | Dato | Fonte |
 |---|---|
-| Meteo, temperature, nevicate, manto nevoso (stima) | [Open-Meteo](https://open-meteo.com) (modelli, incluso MeteoSvizzera) |
+| Impianti, piste, neve misurata, prezzi, stagione | [Bollettino neve MySwitzerland](https://snow.myswitzerland.com) (dati inseriti dalle stazioni tramite infosnow / SISAG) |
+| Webcam | Guidle / Svizzera Turismo |
+| Meteo e neve prevista | [Open-Meteo](https://open-meteo.com) (modelli, incluso MeteoSvizzera) |
 | Pericolo valanghe | [SLF](https://www.slf.ch) |
-| Webcam | [Windy Webcams](https://api.windy.com) |
-| Piste, impianti, prezzi | Valori indicativi in `src/data/resorts.ts` |
 
 ## Prossimi passi
 
-- [ ] Stato in tempo reale degli impianti (aperti/chiusi, seggiovie aperte), raccolto ogni ora da GitHub Actions
-- [ ] Prezzi aggiornati automaticamente
+- [x] Impianti aperti/chiusi in tempo reale
+- [x] Prezzi aggiornati automaticamente
+- [x] Webcam con le immagini dentro l'app
+- [x] Tutte le stazioni svizzere
 - [ ] Notifiche di neve fresca per le stazioni preferite (richiede una "development build")
-- [ ] Estendere l'elenco a tutte le stazioni svizzere
 
 ## Struttura del codice
 
@@ -92,7 +93,9 @@ src/
     (tabs)/          Stazioni, Mappa, Preferiti, Info
     resort/[id].tsx  scheda della stazione
   components/        componenti riutilizzabili
-  data/resorts.ts    elenco delle stazioni
-  lib/               meteo, valanghe, webcam, preferiti
+  data/types.ts      struttura dei dati
+  lib/               dati (store), meteo, valanghe, preferiti
+scripts/scrape.mjs   raccoglie i dati (gira ogni ora su GitHub Actions)
+data/snow.json       dati raccolti
   theme.ts           colori
 ```

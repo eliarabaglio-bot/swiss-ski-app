@@ -1,21 +1,46 @@
 import { router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Callout, Marker } from 'react-native-maps';
-import { RESORTS } from '../../data/resorts';
-import { useSummaries } from '../../lib/summaries';
+import { freshSnow } from '../../components/ResortCard';
+import type { Resort } from '../../data/types';
+import { resortStatus } from '../../lib/format';
+import { useStore } from '../../lib/store';
+import type { WeatherSummary } from '../../lib/weather';
 import { colors, radius, space } from '../../theme';
 
-// Colore del segnaposto in base alla neve fresca delle ultime 24h.
-function pinColor(cm: number | undefined) {
-  if (cm == null) return '#9AA9B8';
+type Mode = 'stato' | 'neve';
+
+const STATUS_COLORS = { open: '#1F9D55', soon: '#1E6FD9', closed: '#9AA9B8' } as const;
+
+function snowColor(cm: number | null) {
+  if (cm == null || cm < 1) return '#9AA9B8';
   if (cm >= 20) return '#5B2BD9';
   if (cm >= 10) return '#1E6FD9';
-  if (cm >= 1) return '#5FB3F9';
-  return '#9AA9B8';
+  return '#5FB3F9';
 }
 
+function colorFor(mode: Mode, r: Resort, w?: WeatherSummary) {
+  return mode === 'stato' ? STATUS_COLORS[resortStatus(r).key] : snowColor(freshSnow(r, w));
+}
+
+const LEGEND: Record<Mode, [string, string][]> = {
+  stato: [
+    [STATUS_COLORS.open, 'Aperta'],
+    [STATUS_COLORS.soon, 'Apre a breve'],
+    [STATUS_COLORS.closed, 'Chiusa'],
+  ],
+  neve: [
+    ['#9AA9B8', '0 cm'],
+    ['#5FB3F9', '1–9 cm'],
+    ['#1E6FD9', '10–19 cm'],
+    ['#5B2BD9', '20+ cm'],
+  ],
+};
+
 export default function MapScreen() {
-  const { data } = useSummaries();
+  const { resorts, weather } = useStore();
+  const [mode, setMode] = useState<Mode>('stato');
 
   return (
     <View style={{ flex: 1 }}>
@@ -23,16 +48,30 @@ export default function MapScreen() {
         style={StyleSheet.absoluteFill}
         initialRegion={{ latitude: 46.75, longitude: 8.25, latitudeDelta: 2.6, longitudeDelta: 3.6 }}
       >
-        {RESORTS.map((r) => {
-          const s = data[r.id];
+        {resorts.map((r) => {
+          if (r.lat == null || r.lon == null) return null;
+          const w = weather[r.id];
+          const color = colorFor(mode, r, w);
+          const fresh = freshSnow(r, w);
           return (
-            <Marker key={r.id} coordinate={{ latitude: r.lat, longitude: r.lon }} pinColor={pinColor(s?.freshSnow24h)}>
+            <Marker
+              key={`${r.id}-${mode}-${color}`}
+              coordinate={{ latitude: r.lat, longitude: r.lon }}
+              tracksViewChanges={false}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              {/* Pallino disegnato da noi: su Android i colori dei segnaposto standard non sono affidabili */}
+              <View style={[styles.dot, { backgroundColor: color }]} />
               <Callout onPress={() => router.push({ pathname: '/resort/[id]', params: { id: r.id } })}>
-                <View style={{ maxWidth: 220 }}>
+                <View style={{ maxWidth: 230 }}>
                   <Text style={styles.calloutTitle}>{r.name}</Text>
                   <Text style={styles.calloutText}>
-                    {s?.tempTop != null ? `${Math.round(s.tempTop)}° in vetta · ` : ''}
-                    {s ? `${s.freshSnow24h} cm nuovi` : ''}
+                    {resortStatus(r).label}
+                    {r.lifts ? ` · ${r.lifts.open}/${r.lifts.total} impianti` : ''}
+                  </Text>
+                  <Text style={styles.calloutText}>
+                    {r.snowTopCm != null ? `${r.snowTopCm} cm in quota` : ''}
+                    {fresh != null ? ` · ${fresh} cm nuovi` : ''}
                   </Text>
                   <Text style={styles.calloutLink}>Apri scheda ›</Text>
                 </View>
@@ -42,16 +81,20 @@ export default function MapScreen() {
         })}
       </MapView>
 
+      <View style={styles.toggle}>
+        {(['stato', 'neve'] as Mode[]).map((m) => (
+          <Pressable key={m} onPress={() => setMode(m)} style={[styles.toggleBtn, mode === m && styles.toggleActive]}>
+            <Text style={[styles.toggleText, mode === m && { color: '#fff' }]}>
+              {m === 'stato' ? 'Aperte / chiuse' : 'Neve 24h'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
       <View style={styles.legend}>
-        <Text style={styles.legendTitle}>Neve ultime 24h</Text>
-        {[
-          ['#9AA9B8', '0 cm'],
-          ['#5FB3F9', '1–9 cm'],
-          ['#1E6FD9', '10–19 cm'],
-          ['#5B2BD9', '20+ cm'],
-        ].map(([c, l]) => (
+        {LEGEND[mode].map(([c, l]) => (
           <View key={l} style={styles.legendRow}>
-            <View style={[styles.dot, { backgroundColor: c }]} />
+            <View style={[styles.legendDot, { backgroundColor: c }]} />
             <Text style={styles.legendText}>{l}</Text>
           </View>
         ))}
@@ -61,9 +104,24 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
+  dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: '#fff' },
   calloutTitle: { fontWeight: '700', color: colors.text },
   calloutText: { color: colors.muted, marginTop: 2 },
   calloutLink: { color: colors.primary, marginTop: 4, fontWeight: '600' },
+  toggle: {
+    position: 'absolute',
+    top: space.md,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderRadius: 999,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  toggleBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999 },
+  toggleActive: { backgroundColor: colors.primary },
+  toggleText: { fontSize: 13, fontWeight: '700', color: colors.text },
   legend: {
     position: 'absolute',
     left: space.md,
@@ -74,8 +132,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  legendTitle: { fontSize: 11, fontWeight: '700', color: colors.text, marginBottom: 4 },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
   legendText: { fontSize: 11, color: colors.text },
 });

@@ -1,13 +1,13 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { FavoritesProvider } from '../lib/favorites';
-import { SummariesProvider } from '../lib/summaries';
+import { StoreProvider } from '../lib/store';
 import { colors } from '../theme';
 
 export default function RootLayout() {
   return (
     <FavoritesProvider>
-      <SummariesProvider>
+      <StoreProvider>
         <StatusBar style="dark" />
         <Stack
           screenOptions={{
@@ -20,7 +20,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="resort/[id]" options={{ title: '', headerBackTitle: 'Indietro' }} />
         </Stack>
-      </SummariesProvider>
+      </StoreProvider>
     </FavoritesProvider>
   );
 }

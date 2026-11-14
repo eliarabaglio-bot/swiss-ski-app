@@ -1,15 +1,14 @@
-// Meteo e neve da Open-Meteo (gratuito, nessuna chiave).
+// Meteo e previsioni di neve da Open-Meteo (gratuito, nessuna chiave).
 // Usa il modello migliore disponibile per la Svizzera (incluso MeteoSvizzera ICON-CH).
-import type { Resort } from '../data/resorts';
+import type { Resort } from '../data/types';
 
 const BASE = 'https://api.open-meteo.com/v1/forecast';
 
 export type WeatherSummary = {
-  tempTop: number | null; // °C ora, in vetta
+  temp: number | null; // °C ora, alla quota della stazione
   weatherCode: number | null;
   windKmh: number | null;
-  snowDepthCm: number | null; // altezza neve (stima del modello)
-  freshSnow24h: number; // cm caduti nelle ultime 24h
+  modelSnow24h: number; // cm caduti nelle ultime 24h (modello)
   forecastSnow48h: number; // cm previsti nelle prossime 48h
 };
 
@@ -29,6 +28,9 @@ export type WeatherDetail = WeatherSummary & {
   days: DayForecast[];
 };
 
+// "nan" = Open-Meteo usa l'altitudine del terreno nel punto
+const elev = (m: number | null) => (m == null ? 'nan' : String(m));
+
 function sumWindow(times: number[], values: (number | null)[], from: number, to: number) {
   let s = 0;
   for (let i = 0; i < times.length; i++) {
@@ -41,57 +43,61 @@ function parseSummary(j: any): WeatherSummary {
   const now = Date.now() / 1000;
   const h = j.hourly ?? {};
   const t: number[] = h.time ?? [];
-  const depthM = j.current?.snow_depth;
   return {
-    tempTop: j.current?.temperature_2m ?? null,
+    temp: j.current?.temperature_2m ?? null,
     weatherCode: j.current?.weather_code ?? null,
     windKmh: j.current?.wind_speed_10m ?? null,
-    snowDepthCm: typeof depthM === 'number' ? Math.round(depthM * 100) : null,
-    freshSnow24h: sumWindow(t, h.snowfall ?? [], now - 24 * 3600, now),
+    modelSnow24h: sumWindow(t, h.snowfall ?? [], now - 24 * 3600, now),
     forecastSnow48h: sumWindow(t, h.snowfall ?? [], now, now + 48 * 3600),
   };
 }
 
-const CURRENT = 'temperature_2m,weather_code,wind_speed_10m,snow_depth';
+const CURRENT = 'temperature_2m,weather_code,wind_speed_10m';
 const HOURLY = 'hourly=snowfall&past_hours=24&forecast_hours=48&timeformat=unixtime&timezone=Europe%2FZurich';
-const SUMMARY_PARAMS = `current=${CURRENT}&${HOURLY}`;
 
-/** Riassunto per molte stazioni con una sola richiesta. */
+/** Riassunto per molte stazioni, a blocchi (poche richieste). */
 export async function fetchSummaries(resorts: Resort[]): Promise<Record<string, WeatherSummary>> {
+  const list = resorts.filter((r) => r.lat != null && r.lon != null);
+  const chunks: Resort[][] = [];
+  for (let i = 0; i < list.length; i += 60) chunks.push(list.slice(i, i + 60));
+
   const out: Record<string, WeatherSummary> = {};
-  // a blocchi di 50 per non avere URL troppo lunghi
-  for (let i = 0; i < resorts.length; i += 50) {
-    const chunk = resorts.slice(i, i + 50);
-    const url =
-      `${BASE}?latitude=${chunk.map((r) => r.lat).join(',')}` +
-      `&longitude=${chunk.map((r) => r.lon).join(',')}` +
-      `&elevation=${chunk.map((r) => r.topAlt).join(',')}&${SUMMARY_PARAMS}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Meteo non disponibile (${res.status})`);
-    const json = await res.json();
-    const arr = Array.isArray(json) ? json : [json];
-    chunk.forEach((r, idx) => {
-      if (arr[idx]) out[r.id] = parseSummary(arr[idx]);
-    });
-  }
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const url =
+        `${BASE}?latitude=${chunk.map((r) => r.lat).join(',')}` +
+        `&longitude=${chunk.map((r) => r.lon).join(',')}` +
+        `&elevation=${chunk.map((r) => elev(r.topAlt)).join(',')}` +
+        `&current=${CURRENT}&${HOURLY}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Meteo non disponibile (${res.status})`);
+      const json = await res.json();
+      const arr = Array.isArray(json) ? json : [json];
+      chunk.forEach((r, idx) => {
+        if (arr[idx]) out[r.id] = parseSummary(arr[idx]);
+      });
+    }),
+  );
   return out;
 }
 
-/** Dettaglio completo per una stazione: vetta + valle + 7 giorni. */
+/** Dettaglio completo per una stazione: quota alta + valle + 7 giorni. */
 export async function fetchDetail(r: Resort): Promise<WeatherDetail> {
+  if (r.lat == null || r.lon == null) throw new Error('Posizione della stazione non disponibile');
   const daily =
     'daily=weather_code,temperature_2m_max,temperature_2m_min,snowfall_sum,wind_speed_10m_max,sunshine_duration&forecast_days=7';
   const topUrl =
-    `${BASE}?latitude=${r.lat}&longitude=${r.lon}&elevation=${r.topAlt}` +
+    `${BASE}?latitude=${r.lat}&longitude=${r.lon}&elevation=${elev(r.topAlt)}` +
     `&current=${CURRENT},freezing_level_height&${HOURLY}&${daily}`;
   const baseUrl =
-    `${BASE}?latitude=${r.lat}&longitude=${r.lon}&elevation=${r.baseAlt}` +
-    `&current=temperature_2m&timezone=Europe%2FZurich`;
+    r.baseAlt != null && r.topAlt != null
+      ? `${BASE}?latitude=${r.lat}&longitude=${r.lon}&elevation=${r.baseAlt}&current=temperature_2m&timezone=Europe%2FZurich`
+      : null;
 
-  const [topRes, baseRes] = await Promise.all([fetch(topUrl), fetch(baseUrl)]);
+  const [topRes, baseRes] = await Promise.all([fetch(topUrl), baseUrl ? fetch(baseUrl) : Promise.resolve(null)]);
   if (!topRes.ok) throw new Error(`Meteo non disponibile (${topRes.status})`);
   const top = await topRes.json();
-  const base = baseRes.ok ? await baseRes.json() : null;
+  const base = baseRes?.ok ? await baseRes.json() : null;
 
   const d = top.daily ?? {};
   const days: DayForecast[] = (d.time ?? []).map((time: number, i: number) => ({

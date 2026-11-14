@@ -1,0 +1,39 @@
+# Aggiorna data/snow.json (impianti, neve, prezzi, webcam) ogni ora durante il giorno.
+name: Aggiorna dati neve
+
+on:
+  schedule:
+    # orari in UTC: ogni ora dalle 06:17 alle 21:17 (ora svizzera invernale)
+    - cron: '17 5-20 * * *'
+  workflow_dispatch: {} # pulsante "Run workflow" per lanciarlo a mano
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Raccogli i dati
+        run: node scripts/scrape.mjs
+      - name: Salva se cambiati
+        run: |
+          git config user.name "swiski-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/snow.json
+          if git diff --cached --quiet; then
+            echo "Nessun cambiamento"
+          else
+            git commit -m "Dati neve aggiornati $(date -u +'%Y-%m-%d %H:%M') UTC"
+            git pull --rebase origin main
+            git push
+          fi

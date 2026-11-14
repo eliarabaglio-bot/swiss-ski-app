@@ -1,26 +1,35 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { typicalSeasonStatus, type Resort } from '../data/resorts';
+import type { Resort } from '../data/types';
 import { useFavorites } from '../lib/favorites';
+import { resortStatus } from '../lib/format';
 import { describeWeather, type WeatherSummary } from '../lib/weather';
 import { colors, radius, space } from '../theme';
 
-export function SeasonBadge({ resort }: { resort: Resort }) {
-  const inSeason = typicalSeasonStatus(resort) === 'in-stagione';
+export function StatusBadge({ resort }: { resort: Resort }) {
+  const s = resortStatus(resort);
   return (
-    <View style={[styles.badge, { backgroundColor: inSeason ? '#E3F6EA' : '#F1F3F5' }]}>
-      <Text style={[styles.badgeText, { color: inSeason ? colors.good : colors.muted }]}>
-        {inSeason ? 'In stagione' : 'Fuori stagione'}
-      </Text>
+    <View style={[styles.badge, { backgroundColor: s.bg }]}>
+      <Text style={[styles.badgeText, { color: s.color }]}>{s.label}</Text>
     </View>
   );
 }
 
-export function ResortCard({ resort, summary }: { resort: Resort; summary?: WeatherSummary }) {
+export function freshSnow(r: Resort, w?: WeatherSummary): number | null {
+  // Preferisci la misura della stazione; se manca, la stima del modello
+  if (r.newSnowTopCm != null && r.hasCurrentData) return r.newSnowTopCm;
+  return w?.modelSnow24h ?? null;
+}
+
+function ResortCardBase({ resort, weather }: { resort: Resort; weather?: WeatherSummary }) {
   const { isFavorite, toggle } = useFavorites();
   const fav = isFavorite(resort.id);
-  const w = describeWeather(summary?.weatherCode);
+  const w = describeWeather(weather?.weatherCode);
+  const fresh = freshSnow(resort, weather);
+  const lifts = resort.lifts;
+  const price = resort.prices?.adult;
 
   return (
     <Link href={{ pathname: '/resort/[id]', params: { id: resort.id } }} asChild>
@@ -30,8 +39,8 @@ export function ResortCard({ resort, summary }: { resort: Resort; summary?: Weat
             <Text style={styles.name} numberOfLines={1}>
               {resort.name}
             </Text>
-            <Text style={styles.sub}>
-              {resort.region} · {resort.baseAlt}–{resort.topAlt} m
+            <Text style={styles.sub} numberOfLines={1}>
+              {resort.place} · {resort.region}
             </Text>
           </View>
           <Pressable hitSlop={12} onPress={() => toggle(resort.id)} accessibilityLabel="Preferito">
@@ -40,16 +49,26 @@ export function ResortCard({ resort, summary }: { resort: Resort; summary?: Weat
         </View>
 
         <View style={styles.stats}>
-          <Stat label="In vetta" value={summary?.tempTop != null ? `${w.emoji} ${Math.round(summary.tempTop)}°` : '—'} />
-          <Stat label="Neve 24h" value={summary ? `${summary.freshSnow24h} cm` : '—'} highlight={!!summary && summary.freshSnow24h >= 10} />
-          <Stat label="Prev. 48h" value={summary ? `${summary.forecastSnow48h} cm` : '—'} highlight={!!summary && summary.forecastSnow48h >= 20} />
-          <Stat label="Manto" value={summary?.snowDepthCm != null ? `${summary.snowDepthCm} cm` : '—'} />
+          <Stat
+            label="Impianti"
+            value={lifts ? `${lifts.open}/${lifts.total}` : '—'}
+            color={lifts && lifts.open > 0 ? colors.good : undefined}
+          />
+          <Stat label="Neve in quota" value={resort.snowTopCm != null ? `${resort.snowTopCm} cm` : '—'} />
+          <Stat label="Neve 24h" value={fresh != null ? `${fresh} cm` : '—'} color={fresh != null && fresh >= 10 ? colors.primary : undefined} />
+          <Stat
+            label="Prev. 48h"
+            value={weather ? `${weather.forecastSnow48h} cm` : '—'}
+            color={weather && weather.forecastSnow48h >= 20 ? colors.primary : undefined}
+          />
         </View>
 
         <View style={[styles.row, { marginTop: space.sm }]}>
-          <SeasonBadge resort={resort} />
-          <Text style={styles.meta}>
-            {resort.pistesKm} km · {resort.lifts} impianti · ~CHF {resort.dayPass}
+          <StatusBadge resort={resort} />
+          <Text style={styles.meta} numberOfLines={1}>
+            {weather?.temp != null ? `${w.emoji} ${Math.round(weather.temp)}°  ·  ` : ''}
+            {resort.pistesKm ? `${resort.pistesKm.open}/${Math.round(resort.pistesKm.total)} km  ·  ` : ''}
+            {price != null ? `CHF ${price}` : resort.prices?.dynamic ? 'prezzo dinamico' : ''}
           </Text>
         </View>
       </Pressable>
@@ -57,10 +76,12 @@ export function ResortCard({ resort, summary }: { resort: Resort; summary?: Weat
   );
 }
 
-function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+export const ResortCard = memo(ResortCardBase);
+
+function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <View style={styles.stat}>
-      <Text style={[styles.statValue, highlight && { color: colors.primary }]}>{value}</Text>
+      <Text style={[styles.statValue, color ? { color } : null]}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );

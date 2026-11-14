@@ -4,9 +4,14 @@ import { SLF_URL } from '../../lib/avalanche';
 import { colors, radius, space } from '../../theme';
 
 const SOURCES = [
-  { name: 'Open-Meteo', what: 'Meteo, temperature, nevicate e altezza neve (stima da modelli, incluso MeteoSvizzera).', url: 'https://open-meteo.com' },
+  {
+    name: 'Bollettino neve MySwitzerland',
+    what: 'Impianti e piste aperti, neve misurata, prezzi e stagione. Dati inseriti dalle stazioni (infosnow / SISAG), aggiornati ogni ora.',
+    url: 'https://snow.myswitzerland.com/bolletino_delle_nevi/pista/',
+  },
+  { name: 'Open-Meteo', what: 'Meteo, temperature e previsioni di neve (modelli, incluso MeteoSvizzera).', url: 'https://open-meteo.com' },
   { name: 'SLF', what: 'Bollettino valanghe ufficiale (solo in inverno).', url: SLF_URL },
-  { name: 'Windy Webcams', what: 'Immagini delle webcam vicino alle stazioni.', url: 'https://www.windy.com/webcams' },
+  { name: 'Guidle / Svizzera Turismo', what: 'Immagini delle webcam vicino alle stazioni.', url: 'https://www.myswitzerland.com/it-ch/webcams/' },
 ];
 
 export default function InfoScreen() {
@@ -22,12 +27,9 @@ export default function InfoScreen() {
 
       <View style={styles.card}>
         <Text style={styles.h2}>Da sapere</Text>
-        <Text style={styles.text}>• L'altezza della neve è una stima dei modelli meteo, non una misura sulle piste.</Text>
-        <Text style={styles.text}>• I prezzi delle giornaliere sono indicativi: molte stazioni hanno prezzi dinamici.</Text>
-        <Text style={styles.text}>
-          • "In stagione" indica il periodo tipico di apertura. Lo stato reale degli impianti è sul sito della stazione
-          (in arrivo nell'app).
-        </Text>
+        <Text style={styles.text}>• Impianti, piste e neve sono quelli comunicati dalle stazioni: alcune li aggiornano più spesso di altre.</Text>
+        <Text style={styles.text}>• La neve "in arrivo" è una previsione dei modelli meteo.</Text>
+        <Text style={styles.text}>• Molte stazioni hanno prezzi dinamici: controlla sempre il prezzo finale sul sito ufficiale.</Text>
       </View>
 
       <View style={styles.card}>

@@ -1,20 +1,19 @@
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { ResortCard } from '../../components/ResortCard';
-import { RESORTS } from '../../data/resorts';
 import { useFavorites } from '../../lib/favorites';
-import { useSummaries } from '../../lib/summaries';
+import { useStore } from '../../lib/store';
 import { colors, space } from '../../theme';
 
 export default function FavoritesScreen() {
   const { favorites } = useFavorites();
-  const { data, loading, refresh } = useSummaries();
-  const list = RESORTS.filter((r) => favorites.includes(r.id));
+  const { resorts, weather, loading, refresh } = useStore();
+  const list = resorts.filter((r) => favorites.includes(r.id));
 
   return (
     <FlatList
       data={list}
       keyExtractor={(r) => r.id}
-      renderItem={({ item }) => <ResortCard resort={item} summary={data[item.id]} />}
+      renderItem={({ item }) => <ResortCard resort={item} weather={weather[item.id]} />}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.primary} />}
       contentContainerStyle={{ paddingTop: space.md, paddingBottom: space.xl, flexGrow: 1 }}
       ListEmptyComponent={
