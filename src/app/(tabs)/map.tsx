@@ -34,7 +34,7 @@ function colorFor(mode: Mode, r: Resort, w?: WeatherSummary) {
 const LEGEND: Record<Mode, [string, string][]> = {
   stato: [
     [STATUS_COLORS.open, 'Aperta (piste)'],
-    [STATUS_COLORS.lifts, 'Solo impianti'],
+    [STATUS_COLORS.lifts, 'Impianti aperti, piste n.d.'],
     [STATUS_COLORS.stale, 'Dati vecchi'],
     [STATUS_COLORS.soon, 'Apre a breve'],
     [STATUS_COLORS.closed, 'Chiusa'],

@@ -82,7 +82,7 @@ export function isStale(r: Resort, now = new Date()): boolean {
 /**
  * Stato per lo sci:
  * - open:   piste aperte oggi (bollettino recente)
- * - lifts:  impianti in funzione ma nessuna pista aperta (es. impianti per escursionisti)
+ * - lifts:  impianti in funzione ma 0 km di piste segnalati (escursionisti, o piste non aggiornate)
  * - stale:  la stazione segnala impianti aperti ma il bollettino è vecchio o senza data
  * - soon:   stagione non ancora iniziata
  * - closed: chiusa
@@ -97,10 +97,11 @@ export function resortStatus(r: Resort, now = new Date()): Status {
   // Servono sia piste sia impianti aperti: alcune stazioni lasciano km di piste "aperti" della stagione precedente
   if (!stale && pistesOpen > 0 && liftsOpen > 0) return { key: 'open', label: 'Aperta', color: '#1F7A45', bg: '#E3F6EA' };
   if (stale && liftsOpen > 0) {
-    const when = r.reportUpdatedAt ? ` (${formatDate(r.reportUpdatedAt)})` : '';
-    return { key: 'stale', label: `Dati vecchi${when}`, color: '#9A5B00', bg: '#FFF1DB' };
+    const label = r.reportUpdatedAt ? `Dati vecchi (${formatDate(r.reportUpdatedAt)})` : 'Dati non disponibili';
+    return { key: 'stale', label, color: '#9A5B00', bg: '#FFF1DB' };
   }
-  if (!stale && liftsOpen > 0) return { key: 'lifts', label: 'Solo impianti', color: '#5B6B8C', bg: '#ECEFF7' };
+  // Impianti aperti ma 0 km di piste: impianti per escursionisti, oppure la stazione non ha aggiornato le piste
+  if (!stale && liftsOpen > 0) return { key: 'lifts', label: 'Impianti aperti', color: '#5B6B8C', bg: '#ECEFF7' };
   if (r.seasonStart && r.seasonStart > today) {
     return { key: 'soon', label: `Apre il ${formatDate(r.seasonStart)}`, color: '#1E5FB8', bg: '#E3EFFC' };
   }

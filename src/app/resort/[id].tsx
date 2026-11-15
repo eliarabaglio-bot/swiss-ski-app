@@ -17,7 +17,7 @@ import { StatusBadge } from '../../components/ResortCard';
 import type { Lift, LiftKind, Resort, Webcam } from '../../data/types';
 import { DANGER, fetchDangerLevel, SLF_URL, type DangerLevel } from '../../lib/avalanche';
 import { useFavorites } from '../../lib/favorites';
-import { formatDate, formatUpdated, isStale, it, KIND_LABEL, KIND_ORDER, MAX_REPORT_AGE_DAYS, peakToday } from '../../lib/format';
+import { formatDate, formatUpdated, isStale, it, KIND_LABEL, KIND_ORDER, MAX_REPORT_AGE_DAYS, peakToday, resortStatus } from '../../lib/format';
 import { useStore } from '../../lib/store';
 import { describeWeather, fetchDetail, type WeatherDetail } from '../../lib/weather';
 import { colors, radius, space } from '../../theme';
@@ -279,6 +279,12 @@ function LiftsSection({ resort }: { resort: Resort }) {
           La stazione non pubblica l'elenco dei singoli impianti. I dettagli sono sul sito ufficiale.
         </Text>
       )}
+      {resortStatus(resort).key === 'lifts' ? (
+        <Text style={styles.note}>
+          ℹ️ La stazione segnala impianti aperti ma 0 km di piste: possono essere impianti per escursionisti, oppure la
+          stazione non ha aggiornato le piste. Verifica sul sito ufficiale se vuoi sciare.
+        </Text>
+      ) : null}
       {resort.pistesKm && resort.pistesKm.open > 0 && resort.lifts?.open === 0 ? (
         <Text style={styles.note}>
           ⚠️ La stazione indica piste aperte ma nessun impianto: il dato sulle piste è probabilmente vecchio.
@@ -404,7 +410,7 @@ function PricesSection({ resort }: { resort: Resort }) {
         {p?.dynamic
           ? `Prezzi dinamici: cambiano in base al giorno e a quanto in anticipo acquisti${p.adult != null ? ' (indicato il prezzo "a partire da")' : ''}.`
           : p
-            ? 'Prezzi pubblicati dalla stazione.'
+            ? 'Prezzi comunicati dalla stazione a Svizzera Turismo: possono non essere aggiornati, verifica sul sito ufficiale.'
             : 'La stazione non ha pubblicato i prezzi.'}
       </Text>
       {resort.website ? <LinkRow label="Biglietti sul sito ufficiale" onPress={() => open(resort.website!)} /> : null}

@@ -426,6 +426,15 @@ async function main() {
     prev = new Map(old.resorts.map((r) => [r.id, r]));
   } catch {}
   for (const r of resorts) {
+    // Prezzi e sito cambiano di rado: se oggi non sono pubblicati (es. stazione aperta, l'elenco non mostra
+    // più la giornaliera), teniamo l'ultimo valore valido.
+    const old = prev.get(r.id);
+    if (old) {
+      if ((!r.prices || r.prices.adult == null) && old.prices?.adult != null) {
+        r.prices = { ...old.prices, dynamic: r.prices?.dynamic ?? old.prices.dynamic };
+      }
+      if (!r.website && old.website) r.website = old.website;
+    }
     const p = prev.get(r.id)?.dayPeak;
     const same = p?.date === today;
     r.dayPeak = {
