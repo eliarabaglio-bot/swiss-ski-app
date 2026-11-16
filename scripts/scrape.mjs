@@ -34,7 +34,7 @@ const REGION_IT = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function get(url, tries = 3) {
+async function get(url, tries = 3, baseDelay = 1500) {
   for (let i = 1; ; i++) {
     try {
       const res = await fetch(url, { headers: { 'user-agent': UA, 'accept-language': 'en' } });
@@ -42,10 +42,13 @@ async function get(url, tries = 3) {
       return await res.text();
     } catch (e) {
       if (i >= tries) throw new Error(`${url}: ${e.message}`);
-      await sleep(1500 * i);
+      await sleep(baseDelay * i);
     }
   }
 }
+
+/** Errore "fonte non raggiungibile": gestito a parte (vedi main). */
+class SourceDownError extends Error {}
 
 function decode(s) {
   return s
@@ -101,7 +104,13 @@ function parseDate(s) {
 // ---------- elenco ----------
 
 async function fetchList() {
-  const first = await get(LIST_URL);
+  let first;
+  try {
+    // il sito a volte è in manutenzione: riprova per circa 2 minuti (5 tentativi, attese crescenti)
+    first = await get(LIST_URL, 5, 8000);
+  } catch (e) {
+    throw new SourceDownError(e.message);
+  }
   const pages = Math.max(1, ...[...first.matchAll(/\?p=(\d+)/g)].map((m) => +m[1]));
   const htmls = [first];
   for (let p = 2; p <= pages; p++) htmls.push(await get(`${LIST_URL}?p=${p}`));
@@ -460,7 +469,24 @@ async function main() {
   );
 }
 
-main().catch((e) => {
+// Se la fonte è giù per poco tempo non è un errore: teniamo i dati precedenti senza far fallire il job
+// (niente email). Se i dati hanno più di 6 ore, il job fallisce e GitHub avvisa via email.
+const MAX_STALE_HOURS = 6;
+
+main().catch(async (e) => {
+  if (e instanceof SourceDownError) {
+    let ageH = Infinity;
+    try {
+      const old = JSON.parse(await readFile('data/snow.json', 'utf8'));
+      ageH = (Date.now() - new Date(old.updatedAt).getTime()) / 3600000;
+    } catch {}
+    if (ageH < MAX_STALE_HOURS) {
+      console.warn(`⚠️ Fonte non disponibile (${e.message}). Tengo i dati di ${ageH.toFixed(1)} ore fa.`);
+      process.exit(0);
+    }
+    console.error(`❌ Fonte non disponibile da più di ${MAX_STALE_HOURS} ore: ${e.message}`);
+    process.exit(1);
+  }
   console.error(e);
   process.exit(1);
 });
