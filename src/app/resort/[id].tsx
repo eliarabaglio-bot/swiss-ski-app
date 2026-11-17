@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { StatusBadge } from '../../components/ResortCard';
 import type { Lift, LiftKind, Resort, Webcam } from '../../data/types';
-import { DANGER, fetchDangerLevel, SLF_URL, type DangerLevel } from '../../lib/avalanche';
+import { DANGER, SLF_URL } from '../../lib/avalanche';
 import { useFavorites } from '../../lib/favorites';
 import { formatDate, formatUpdated, isStale, it, KIND_LABEL, KIND_ORDER, MAX_REPORT_AGE_DAYS, peakToday, resortStatus } from '../../lib/format';
 import { useStore } from '../../lib/store';
@@ -33,7 +33,6 @@ export default function ResortScreen() {
 
   const [weather, setWeather] = useState<WeatherDetail | null>(null);
   const [weatherError, setWeatherError] = useState<string | null>(null);
-  const [danger, setDanger] = useState<DangerLevel | null | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [cam, setCam] = useState<Webcam | null>(null);
 
@@ -45,11 +44,6 @@ export default function ResortScreen() {
       fetchDetail(resort)
         .then(setWeather)
         .catch((e) => setWeatherError(e?.message ?? 'Errore')),
-      resort.lat != null && resort.lon != null
-        ? fetchDangerLevel(resort.lat, resort.lon)
-            .then(setDanger)
-            .catch(() => setDanger(null))
-        : Promise.resolve(setDanger(null)),
     ]);
     setLoading(false);
   }, [resort]);
@@ -150,14 +144,24 @@ export default function ResortScreen() {
 
         {/* Valanghe */}
         <Section title="⚠️ Pericolo valanghe">
-          {danger === undefined ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : danger === null ? (
-            <Text style={styles.muted}>Nessun bollettino attivo per questa zona (fuori stagione o dato non disponibile).</Text>
+          {resort.avalanche ? (
+            <>
+              <View style={[styles.danger, { backgroundColor: DANGER[resort.avalanche.level].color }]}>
+                <Text style={[styles.dangerText, { color: DANGER[resort.avalanche.level].text }]}>
+                  {DANGER[resort.avalanche.level].label}
+                  {resort.avalanche.sub && resort.avalanche.sub !== '=' ? ` (${resort.avalanche.level}${resort.avalanche.sub})` : ''}
+                </Text>
+              </View>
+              <Text style={styles.muted}>Zona: {resort.avalanche.regionName}</Text>
+              {resort.avalanche.problems.length ? (
+                <Text style={styles.note}>Problemi principali: {resort.avalanche.problems.join(' · ')}</Text>
+              ) : null}
+              <Text style={styles.note}>
+                Vale fuori dalle piste aperte. Bollettino valido fino a {formatUpdated(resort.avalanche.validUntil)}.
+              </Text>
+            </>
           ) : (
-            <View style={[styles.danger, { backgroundColor: DANGER[danger].color }]}>
-              <Text style={[styles.dangerText, { color: DANGER[danger].text }]}>{DANGER[danger].label}</Text>
-            </View>
+            <Text style={styles.muted}>Nessun grado di pericolo per questa zona (fuori stagione o zona senza neve).</Text>
           )}
           <LinkRow label="Bollettino completo SLF" onPress={() => open(SLF_URL)} />
         </Section>

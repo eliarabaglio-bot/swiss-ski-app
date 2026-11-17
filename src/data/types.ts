@@ -57,6 +57,15 @@ export type Resort = {
   dayPeak?: { date: string; lifts: number; pistesKm: number };
   /** Id e nomi di schede unite a questa (stesso comprensorio pubblicato da più località). */
   aliases?: string[];
+  /** Pericolo valanghe SLF per la zona della stazione (null = nessun grado pubblicato). */
+  avalanche?: {
+    level: 1 | 2 | 3 | 4 | 5;
+    sub: '' | '-' | '=' | '+';
+    problems: string[];
+    validUntil: string | null;
+    regionName: string;
+    regionId: string;
+  } | null;
   otherNames?: string[];
 };
 

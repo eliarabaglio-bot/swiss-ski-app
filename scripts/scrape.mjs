@@ -373,6 +373,83 @@ function mergeDuplicates(list) {
   return out;
 }
 
+// ---------- valanghe (SLF) ----------
+// Zone (poligoni) da .../geojson; gradi di pericolo e problemi da .../json (bollettino CAAML).
+// Il bollettino si aggiorna alle 17:00 (e alle 8:00 in alta stagione); fuori stagione è vuoto.
+
+const SLF_ZONES_URL = 'https://aws.slf.ch/api/bulletin/caaml/it/geojson';
+const SLF_BULLETIN_URL = 'https://aws.slf.ch/api/bulletin/caaml/it/json';
+const DANGER_LEVEL = { low: 1, moderate: 2, considerable: 3, high: 4, very_high: 5 };
+const SUBDIVISION = { minus: '-', neutral: '=', plus: '+' };
+const PROBLEM_IT = {
+  new_snow: 'neve fresca',
+  wind_slab: 'neve ventata',
+  persistent_weak_layers: 'strati deboli persistenti',
+  wet_snow: 'neve bagnata',
+  gliding_snow: 'valanghe di slittamento',
+  cornices: 'cornici',
+  no_distinct_avalanche_problem: 'nessun problema evidente',
+  favourable_situation: 'situazione favorevole',
+};
+
+async function fetchAvalanche() {
+  const [zonesJson, bulletinJson] = await Promise.all([
+    get(SLF_ZONES_URL).then(JSON.parse),
+    get(SLF_BULLETIN_URL).then(JSON.parse),
+  ]);
+  const zones = (zonesJson.features ?? []).map((f) => ({
+    geometry: f.geometry,
+    regions: (f.properties?.regions ?? []).map((x) => x.regionID),
+  }));
+  const byRegion = new Map();
+  for (const b of bulletinJson.bulletins ?? []) {
+    const ratings = (b.dangerRatings ?? []).filter((d) => DANGER_LEVEL[d.mainValue]);
+    if (!ratings.length) continue;
+    const top = ratings.reduce((a, d) => (DANGER_LEVEL[d.mainValue] > DANGER_LEVEL[a.mainValue] ? d : a));
+    const problems = (b.avalancheProblems ?? [])
+      .map((p) => {
+        const lb = p.elevation?.lowerBound;
+        const ub = p.elevation?.upperBound;
+        const where = lb ? `sopra ${lb} m` : ub ? `sotto ${ub} m` : '';
+        return [PROBLEM_IT[p.problemType] ?? p.problemType, where].filter(Boolean).join(' ');
+      })
+      .filter(Boolean);
+    const info = {
+      level: DANGER_LEVEL[top.mainValue],
+      sub: SUBDIVISION[top.customData?.CH?.subdivision] ?? '',
+      problems: [...new Set(problems)].slice(0, 3),
+      validUntil: b.validTime?.endTime ?? null,
+    };
+    for (const reg of b.regions ?? []) byRegion.set(reg.regionID, { ...info, regionName: reg.name });
+  }
+  return { zones, byRegion };
+}
+
+function pointInRing(lon, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function inGeometry(lon, lat, g) {
+  if (g?.type === 'Polygon') return pointInRing(lon, lat, g.coordinates[0]);
+  if (g?.type === 'MultiPolygon') return g.coordinates.some((p) => pointInRing(lon, lat, p[0]));
+  return false;
+}
+
+function avalancheFor(av, lat, lon) {
+  const zone = av.zones.find((z) => inGeometry(lon, lat, z.geometry));
+  if (!zone) return null;
+  for (const id of zone.regions) {
+    const info = av.byRegion.get(id);
+    if (info) return { ...info, regionId: id };
+  }
+  return null;
+}
+
 // ---------- main ----------
 
 async function main() {
@@ -410,8 +487,17 @@ async function main() {
   }
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
+  let avalanche = null;
+  try {
+    avalanche = await fetchAvalanche();
+    console.log(`Valanghe: ${avalanche.zones.length} zone, ${avalanche.byRegion.size} regioni con grado di pericolo`);
+  } catch (e) {
+    console.warn(`Bollettino valanghe non disponibile: ${e.message}`);
+  }
+
   for (const r of resorts) {
     if (r.lat == null) continue;
+    r.avalanche = avalanche ? avalancheFor(avalanche, r.lat, r.lon) : null;
     r.webcams = webcams
       .map((c) => ({ c, d: distKm(r, c) }))
       .filter((x) => x.d <= WEBCAM_RADIUS_KM)
